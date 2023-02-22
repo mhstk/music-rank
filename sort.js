@@ -1,4 +1,5 @@
 let songs = [];
+let songs_with_ratings = [];
 var queries = {};
 let val = 0;
 let cnt = 0;
@@ -22,6 +23,7 @@ $.get(`https://musicbrainz.org/ws/2/release/${queries.id}?inc=recordings&fmt=jso
         for(let song of album.media[i].tracks)
         {
             songs.push(song.title);
+            songs_with_ratings.push({title: song.title, rating: 1200})
         }
         
     }
@@ -32,8 +34,40 @@ $.get(`https://musicbrainz.org/ws/2/release/${queries.id}?inc=recordings&fmt=jso
 })
 
 async function sortSongs(){
-    await quickSort(songs, 0, songs.length - 1);
+    // await quickSort(songs, 0, songs.length - 1);
+    await allComp();
+    songs = songs_with_ratings.sort((a,b) => (a.rating > b.rating) ? -1 : ((b.rating > a.rating) ? 1 : 0)).map(e => e.title);
     done();
+}
+
+async function allComp(){
+    for (let i = 0; i<songs_with_ratings.length - 1; i++){
+        for (let j = i+1; j<songs_with_ratings.length ; j++){
+            let a = songs_with_ratings[i].title
+            let b = songs_with_ratings[j].title
+            $("#levi").text(a);
+            $("#desni").text(b);
+            while(!val)
+                await sleep(100);
+            let v = val;
+            val = 0;
+            cnt++;
+            if (v == -1){
+                new_rating = elo([songs_with_ratings[i].rating, songs_with_ratings[j].rating]);
+                songs_with_ratings[i].rating = new_rating[0];
+                songs_with_ratings[j].rating = new_rating[1];
+            }else{
+                new_rating = elo([songs_with_ratings[j].rating, songs_with_ratings[i].rating]);
+                songs_with_ratings[j].rating = new_rating[0];
+                songs_with_ratings[i].rating = new_rating[1];
+            }
+            console.log([...songs_with_ratings].sort((a,b) => a.rating > b.rating ? -1 : a.rating > b.rating ? 1 : 0));
+            $('#rating_debug').text([...songs_with_ratings].sort((a,b) => a.rating > b.rating ? -1 : a.rating > b.rating ? 1 : 0)
+                                .map(e => e.title + '    ' + e.rating.toFixed(2) )
+                                .join("\n") + "\n\nNum comparisons: " + cnt)
+        }
+        
+    }
 }
 
 const sleep = (milliseconds) => {
@@ -106,3 +140,21 @@ $("#kopiraj").click(function(){
     navigator.clipboard.writeText(copyText);
 
 })
+
+const elo = ([...ratings], kFactor = 128, selfRating) => {
+    const [a, b] = ratings;
+    const expectedScore = (self, opponent) => 1 / (1 + 10 ** ((opponent - self) / 400));
+    const newRating = (rating, i) =>
+      (selfRating || rating) + kFactor * (i - expectedScore(i ? a : b, i ? b : a));
+    if (ratings.length === 2) {
+      return [newRating(a, 1), newRating(b, 0)];
+    }
+    for (let i = 0, len = ratings.length; i < len; i++) {
+      let j = i;
+      while (j < len - 1) {
+        j++;
+        [ratings[i], ratings[j]] = elo([ratings[i], ratings[j]], kFactor);
+      }
+    }
+    return ratings;
+  };
